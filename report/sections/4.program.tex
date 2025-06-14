@@ -1,0 +1,489 @@
+\section{程序设计}
+
+\subsection{系统初始化模块}
+
+\begin{lstlisting}
+    /****************************************
+    *          系统初始化模块开始           *
+    ****************************************/
+
+   char buf[30] = {0};
+   float current_temp;
+   float current_humi;
+
+   // 硬件模块初始化
+   delay_init(168);
+   key_init();
+   key_interrupt_init();
+   lcd_init(FAN1);
+   infrared_init();
+   rgb_init();
+   buzzer_init();
+   led_init();
+   usart_init(115200);
+   htu21d_init();
+   fan_pwm_init(50000 - 1, 336 - 1);
+
+   /****************************************
+    *        LCD初始化显示模块开始         *
+    ****************************************/
+
+   // LCD界面初始化显示 - 显示基本标签和初始值
+   sprintf(buf, "Fan PWM:%3d%%", fan_pwm[count]);
+   LCDDrawFont16_Next(get_centered_x(buf), 20 + 10 * 7, 4, 320, buf, 0x0000,
+                      0xffff); // 显示初始PWM值
+   LCDDrawFont16_Next(get_centered_x("Mode:"), 30 + 10 * 8, 4, 320,
+                      "Mode:", 0x0000, 0xffff); // 显示模式标签
+   LCDDrawFont16_Next(get_centered_x("Temp:"), 30 + 10 * 10, 4, 320,
+                      "Temp:", 0x0000, 0xffff); // 显示温度标签
+   LCDDrawFont16_Next(get_centered_x("Humi:"), 30 + 10 * 12, 4, 320,
+                      "Humi:", 0x0000, 0xffff); // 显示湿度标签
+\end{lstlisting}
+
+\subsection{温、湿度检测模块}
+
+\begin{lstlisting}
+    /*********************************************************
+    * 功能:读取温度
+    * 参数:无
+    * 返回:-1/float t -- 处理后的温度值
+    **********************************************************/
+   float htu21d_t(void) {
+     char cmd = 0xf3;
+     char dat[4];
+     i2c_write(HTU21D_ADDR, &cmd, 1);
+     delay_ms(50);
+     if (i2c_read(HTU21D_ADDR, dat, 2) == 2) {
+       if ((dat[1] & 0x02) == 0) {
+         float t =
+             -46.85f + 175.72f * ((dat[0] << 8 | dat[1]) & 0xfffc) / (1 << 16);
+         return t;
+       }
+     }
+     return -1;
+   }
+
+   /************************************************************
+    * 名称:htu21d_h()
+    * 功能:读取湿度
+    * 参数:无
+    * 返回:-1/float h -- 处理后的湿度值
+    ************************************************************/
+   float htu21d_h(void) {
+     char cmd = 0xf5;
+     char dat[4];
+
+     i2c_write(HTU21D_ADDR, &cmd, 1);
+     delay_ms(50);
+     if (i2c_read(HTU21D_ADDR, dat, 2) == 2) {
+       if ((dat[1] & 0x02) == 0x02) {
+         float h = -6 + 125 * ((dat[0] << 8 | dat[1]) & 0xfffc) / (1 << 16);
+         return h;
+       }
+     }
+     return -1;
+   }
+\end{lstlisting}
+
+\subsection{UART通信模块}
+
+\begin{lstlisting}
+    /****************************************
+    *          UART通信模块开始            *
+    ****************************************/
+
+   void check_uart_command(void) {
+     // 检查串口接收缓冲区是否有足够的数据
+     if (Usart_len >= 4) {
+       // 检查是否接收到"Auto"命令
+       if (strncmp((char *)USART_RX_BUF, "Auto", 4) == 0) {
+         mode = AUTO_MODE;
+         led_control(D2);
+         printf("Mode switched to Auto\r\n");
+         update_display(htu21d_t(), htu21d_h());
+       }
+       // 检查是否接收到"Manual"命令
+       else if (strncmp((char *)USART_RX_BUF, "Manual", 6) == 0) {
+         mode = MANUAL_MODE;
+         led_control(D1);
+         printf("Mode switched to Manual\r\n");
+         update_display(htu21d_t(), htu21d_h());
+       }
+       // 清空串口接收缓冲区
+       clean_usart();
+     }
+   }
+\end{lstlisting}
+
+\subsection{风扇模块}
+
+\begin{lstlisting}
+    /************************************************************
+    * 功能：风扇传感器初始化
+    * 参数：无
+    * 返回：无
+    *************************************************************/
+   void fan_init(void) {
+     GPIO_InitTypeDef GPIO_InitStructure; // 定义一个GPIO_InitTypeDef类型的结构体
+     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOE,
+                            ENABLE); // 开启风扇传感器相关的GPIO外设时钟
+
+     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;        // 选择要控制的GPIO引脚
+     GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;   // 设置引脚的输出类型为推挽
+     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;    // 设置引脚模式为输出模式
+     GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN;   // 设置引脚为下拉模式
+     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz; // 设置引脚速率为2MHz
+
+     GPIO_Init(GPIOE, &GPIO_InitStructure); // 初始化GPIO配置
+     GPIO_ResetBits(GPIOE, GPIO_Pin_5);
+   }
+
+   /**************************************************************
+    * 名称：void fan_control(unsigned char cmd)
+    * 功能：风扇控制驱动
+    * 参数：控制命令
+    * 返回：无
+    **************************************************************/
+   void fan_control(unsigned char cmd) {
+     if (cmd & 0x01)
+       GPIO_SetBits(GPIOE, GPIO_Pin_5);
+     else
+       GPIO_ResetBits(GPIOE, GPIO_Pin_5);
+   }
+
+   static u32 cycle; // 这个值不要小于100，否则占空比不准确
+   /***************************************************************
+    * 名称：fan_pwm_init()
+    * 功能：风扇传感器PWM初始化  PE5 连接 TIM9——CH1  16位定时器
+    * 参数：arr：自动重装值  psc：时钟预分频数
+    * 返回：无
+    ***************************************************************/
+   void fan_pwm_init(u32 arr, u32 psc) {
+     cycle = arr + 1; // 用来计算占空比。需要加1
+     // 此部分需手动修改IO口设置
+     GPIO_InitTypeDef GPIO_InitStructure = {0};
+     TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure = {0};
+     TIM_OCInitTypeDef TIM_OCInitStructure = {0};
+
+     RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM9, ENABLE);  // TIM9时钟使能
+     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOE, ENABLE); // 使能PORTF时钟
+
+     GPIO_PinAFConfig(GPIOE, GPIO_PinSource5, GPIO_AF_TIM9); // GPIOE5
+                                                             // 复用为定时器9
+
+     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;          // GPIOE5
+     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;       // 复用功能
+     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz; // 速度100MHz
+     GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;     // 推挽复用输出
+     GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;       // 上拉
+     GPIO_Init(GPIOE, &GPIO_InitStructure);             // 初始化PE5
+
+     TIM_TimeBaseStructure.TIM_Prescaler =
+         psc; // 定时器分频,定时器9挂载到APB2，为168MHZ，如果这里分频到1MHZ，设置为167
+     TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; // 向上计数模式
+     TIM_TimeBaseStructure.TIM_Period = arr;                     // 自动重装载值
+     TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+     TIM_TimeBaseInit(TIM9, &TIM_TimeBaseStructure); // 初始化定时器9
+
+     // 初始化TIM9 Channel1 PWM模式
+     TIM_OCInitStructure.TIM_OCMode =
+         TIM_OCMode_PWM1; // 选择定时器模式:TIM脉冲宽度调制模式
+     TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable; // 比较输出使能
+     TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;     // 输出极性
+     TIM_OC1Init(TIM9, &TIM_OCInitStructure);                      // 初始化通道1
+
+     TIM_OC1PreloadConfig(TIM9,
+                          TIM_OCPreload_Enable); // 使能TIM在CCR1上的预装载寄存器
+
+     TIM_ARRPreloadConfig(TIM9, ENABLE); // ARPE使能
+     TIM_Cmd(TIM9, ENABLE);              // 使能TIM
+   }
+
+   /******************************************************************
+    * 名称：fan_pwm_control
+    * 功能：风扇PWM驱动控制
+    * 参数：pwm 占空比 0-100
+    * 返回：无
+    ******************************************************************/
+   void fan_pwm_control(uint32_t pwm) {
+     uint32_t _pwm = cycle / 100 * pwm;
+     TIM_SetCompare1(TIM9, _pwm); // 修改比较值，修改占空比
+   }
+\end{lstlisting}
+
+\subsection{风扇自动控制模块}
+
+\begin{lstlisting}[caption={自动调控逻辑}]
+ /****************************************
+ *         风扇自动控制模块开始          *
+ ****************************************/
+
+void auto_control(float temp, float humi) {
+  char new_count;
+
+  // 根据温度范围自动调节风扇档位
+  if (temp >= TEMP_HIGH) { // 温度 >= 30°C，高速档
+    new_count = 3;
+    // 只在最高档时响3下蜂鸣器，和手动模式保持一致
+    if (buzzer_count < 3) {
+      buzzer_tweet();
+      buzzer_count++;
+    }
+    rgb_ctrl(5);                 // 设置RGB指示灯为高温状态
+  } else if (temp >= TEMP_MED) { // 温度 >= 25°C，中速档
+    new_count = 2;
+    buzzer_count = 0;            // 重置蜂鸣器计数
+    rgb_ctrl(4);                 // 设置RGB指示灯为中温状态
+  } else if (temp >= TEMP_LOW) { // 温度 >= 20°C，低速档
+    new_count = 1;
+    buzzer_count = 0; // 重置蜂鸣器计数
+    rgb_ctrl(3);      // 设置RGB指示灯为低温状态
+  } else {            // 温度 < 20°C，关闭风扇
+    new_count = 0;
+    buzzer_count = 0; // 重置蜂鸣器计数
+    rgb_ctrl(2);      // 设置RGB指示灯为正常状态
+  }
+
+  // 如果档位发生变化，更新风扇控制和显示
+  if (count != new_count) {
+    count = new_count;
+    update_display(temp, humi);
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[caption={模式匹配逻辑}]
+    // 根据当前模式执行风扇控制策略
+    if (mode == AUTO_MODE) {
+      // 自动模式：根据温度自动调节风扇转速
+      auto_control(current_temp, current_humi);
+    } else {
+      // 手动模式：根据用户设定的档位控制风扇和指示灯
+      if (count == 3) { // 最高档位（100%）
+        if (buzzer_count < 3) {
+          buzzer_tweet(); // 最高档时蜂鸣器响3下提醒
+          buzzer_count++;
+        }
+        rgb_ctrl(5);           // 高速档RGB指示灯
+      } else if (count == 2) { // 中档位（66%）
+        buzzer_count = 0;      // 重置蜂鸣器计数
+        rgb_ctrl(4);           // 中速档RGB指示灯
+      } else if (count == 1) { // 低档位（33%）
+        buzzer_count = 0;      // 重置蜂鸣器计数
+        rgb_ctrl(3);           // 低速档RGB指示灯
+      } else if (count == 0) { // 关闭档位（0%）
+        buzzer_count = 0;      // 重置蜂鸣器计数
+        rgb_ctrl(2);           // 停止档RGB指示灯
+      }
+    }
+\end{lstlisting}
+
+\subsection{风扇手动控制模块}
+
+\begin{lstlisting}
+      if (mode == MANUAL_MODE && current_key == K1_PREESED) {
+        // K1按键：手动模式下增加风扇档位
+        count++;
+        buzzer_tweet(); // 按键确认音
+        if (count >= ARRAY(fan_pwm))
+          count = ARRAY(fan_pwm) - 1; // 限制最大档位
+        update_display(current_temp, current_humi);
+      } else if (mode == MANUAL_MODE && current_key == K2_PREESED) {
+        // K2按键：手动模式下减少风扇档位
+        if (count > 0) {
+          count--; // 减少档位
+        }
+        buzzer_tweet(); // 按键确认音
+        update_display(current_temp, current_humi);
+      }
+\end{lstlisting}
+
+\subsection{LCD显示模块}
+
+\begin{lstlisting}[caption={主要信息显示}]
+    /****************************************
+    *          LCD显示模块开始             *
+    ****************************************/
+
+   void update_display(float temp, float humi) {
+     char buf[100];
+
+     // 系统关闭状态显示
+     if (system_power == 0) {
+       sprintf(buf, "---风扇已关闭-----");
+       LCDDrawFont16_Next(get_centered_x(buf), 20 + 10 * 7, 4, 320, buf, 0x0000,
+                          0xffff);
+       LCDDrawFont16_Next(get_centered_x("---按下K4启动---"), 30 + 10 * 8, 4, 320,
+                          "---按下K4启动---", 0x0000, 0xffff);
+       // 清空其他显示行
+       LCDDrawFont16_Next(get_centered_x(""), 30 + 10 * 10, 4, 320, "", 0x0000,
+                          0xffff);
+       LCDDrawFont16_Next(get_centered_x(""), 30 + 10 * 12, 4, 320, "", 0x0000,
+                          0xffff);
+       LCDDrawFont16_Next(get_centered_x(""), 30 + 10 * 14, 4, 320, "", 0x0000,
+                          0xffff);
+       return;
+     }
+
+     // 系统运行状态显示
+     // 显示风扇转速和档位
+     sprintf(buf, "风扇转速: %3d%%(%s)", fan_pwm[count], fan_pwm1[count]);
+     LCDDrawFont16_Next(get_centered_x(buf), 20 + 10 * 7, 4, 320, buf, 0x0000,
+                        0xffff);
+
+     // 显示当前工作模式
+     sprintf(buf, "风扇模式: %s",
+             mode == AUTO_MODE ? "-自动-"
+                               : (mode == MANUAL_MODE ? "-手动-" : "-自动-"));
+     LCDDrawFont16_Next(get_centered_x(buf), 30 + 10 * 8, 4, 320, buf, 0x0000,
+                        0xffff);
+
+     // 显示当前温度
+     sprintf(buf, "当前温度: %.2f °C", temp);
+     LCDDrawFont16_Next(get_centered_x(buf), 30 + 10 * 10, 4, 320, buf, 0x0000,
+                        0xffff);
+
+     // 显示当前湿度
+     sprintf(buf, "当前湿度: %.1f%%RH", humi);
+     LCDDrawFont16_Next(get_centered_x(buf), 30 + 10 * 12, 4, 320, buf, 0x0000,
+                        0xffff);
+   }
+\end{lstlisting}
+
+\begin{lstlisting}[caption={实验标题显示}]
+    /*****************************************************
+    * 名称:lcd_init()
+    * 功能:LCD初始化并打印实验基本信息
+    * 参数:name -- 实验名称
+    * 返回:无
+    ******************************************************/
+   void lcd_init(unsigned char name) {
+     LCD_DriverInit();
+     LCD_Clear(0xFFFF);
+     LCD_FillColor(0, 0, 319, 30, 0x4596);
+     LCDDrawFnt24(80, 5, "风扇智能调节系统", 0xFFD700, 0x4596);
+     LCD_FillColor(0, 240 - 30, 319, 240, 0x4596);
+     LCDDrawFnt24(96, 240 - 30 + 5, "嵌入式实践设计", 0xFFD700, 0x4596);
+   }
+\end{lstlisting}
+
+\subsection{按键控制模块}
+
+\begin{lstlisting}[caption={按键中断初始化}]
+    void key_interrupt_init(void) {
+        EXTI_InitTypeDef EXTI_InitStructure;
+        NVIC_InitTypeDef NVIC_InitStructure;
+
+        RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);
+
+        SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOB, EXTI_PinSource12);
+        SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOB, EXTI_PinSource13);
+        SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOB, EXTI_PinSource14);
+        SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOB, EXTI_PinSource15);
+
+        EXTI_InitStructure.EXTI_Line =
+            EXTI_Line12 | EXTI_Line13 | EXTI_Line14 | EXTI_Line15;
+        EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+        EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Falling;
+        EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+        EXTI_Init(&EXTI_InitStructure);
+
+        NVIC_InitStructure.NVIC_IRQChannel = EXTI15_10_IRQn;
+        NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x02;
+        NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0x02;
+        NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+        NVIC_Init(&NVIC_InitStructure);
+      }
+
+      void EXTI15_10_IRQHandler(void) {
+        if (EXTI_GetITStatus(EXTI_Line12) != RESET) {
+          EXTI_ClearITPendingBit(EXTI_Line12);
+          key_value = K1_PREESED;
+          key_interrupt_flag = 1;
+        }
+        if (EXTI_GetITStatus(EXTI_Line13) != RESET) {
+          EXTI_ClearITPendingBit(EXTI_Line13);
+          key_value = K2_PREESED;
+          key_interrupt_flag = 1;
+        }
+        if (EXTI_GetITStatus(EXTI_Line14) != RESET) {
+          EXTI_ClearITPendingBit(EXTI_Line14);
+          key_value = K3_PREESED;
+          key_interrupt_flag = 1;
+        }
+        if (EXTI_GetITStatus(EXTI_Line15) != RESET) {
+          EXTI_ClearITPendingBit(EXTI_Line15);
+          key_value = K4_PREESED;
+          key_interrupt_flag = 1;
+        }
+      }
+\end{lstlisting}
+
+\begin{lstlisting}[caption={部分按键控制模块}]
+    /****************************************
+     *          按键控制模块开始            *
+     ****************************************/
+
+    // K4按键：系统电源开关控制
+    if (key_interrupt_flag) {
+      delay_count(50); // 按键防抖延时
+      char current_key = key_value;
+      key_interrupt_flag = 0;
+
+      if (current_key == K4_PREESED) {
+        system_power = !system_power; // 切换系统电源状态
+        buzzer_tweet();               // 按键确认音
+        if (system_power == 0) {
+          count = 0;                       // 关闭时重置风扇档位
+          fan_pwm_control(fan_pwm[count]); // 停止风扇
+          rgb_ctrl(2);                     // 设置RGB为正常状态
+        }
+        update_display(htu21d_t(), htu21d_h());
+        continue;
+      }
+    }
+\end{lstlisting}
+
+\subsection{蜂鸣器模块}
+
+\begin{lstlisting}
+    void buzzer_init(void)
+    {
+      GPIO_InitTypeDef GPIO_InitStructure;
+
+      RCC_AHB1PeriphClockCmd(BUZZER_RCC, ENABLE);
+
+      GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
+      GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+      GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
+      GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+
+      GPIO_InitStructure.GPIO_Pin = BUZZER_PIN;
+      GPIO_Init(BUZZER_PORT, &GPIO_InitStructure);
+
+      BUZZER_CTRL(OFF);
+    }
+
+    void buzzer_tweet(void)
+    {
+      BUZZER_CTRL(ON);
+      delay_ms(5);
+      BUZZER_CTRL(OFF);
+    }
+
+    void buzzer_stop(void)
+    {
+      BUZZER_CTRL(OFF);  // 关闭蜂鸣器
+    }
+\end{lstlisting}
+
+\newpage
+
+\subsection{程序流程图}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{../figures/program-gra.png}
+  \caption{程序流程图}
+  \label{fig:1}
+\end{figure}

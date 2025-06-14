@@ -1,0 +1,85 @@
+\documentclass[9pt, a4paper]{article}
+
+\usepackage{ctex}
+\usepackage{float}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{multirow}
+\geometry{margin=2.5cm}
+
+\usepackage{listings}
+\usepackage[dvipsnames]{xcolor}
+% 在导言区进行样式设置
+\lstset{
+  language=c, % 设置语言
+  basicstyle=\ttfamily\small, % 设置字体族和大小
+  breaklines=true, % 自动换行
+  keywordstyle=\bfseries\color{Purple}, % C语言关键字：紫色粗体
+  morekeywords={uint32_t,uint8_t,float,char,static,const}, % C语言扩展关键字
+  emph=[1]{delay_init,key_init,lcd_init,infrared_init,rgb_init,buzzer_init,led_init,usart_init,htu21d_init,fan_pwm_init}, % 初始化函数
+  emphstyle=[1]\bfseries\color{Red}, % 初始化函数：红色粗体
+  emph=[2]{htu21d_t,htu21d_h,get_infrared_status,fan_pwm_control,rgb_ctrl,led_control,buzzer_tweet}, % 硬件控制函数
+  emphstyle=[2]\bfseries\color{Orange}, % 硬件控制函数：橙色粗体
+  emph=[3]{update_display,get_centered_x,check_uart_command,send_system_status,auto_control,check_human_presence}, % 逻辑函数
+  emphstyle=[3]\bfseries\color{Blue}, % 逻辑函数：蓝色粗体
+  emph=[4]{sprintf,printf,strncmp,strlen,delay_ms,delay_count}, % 标准库函数
+  emphstyle=[4]\color{Magenta}, % 标准库函数：洋红色
+  commentstyle=\itshape\color{ForestGreen}, % 注释：森林绿斜体
+  stringstyle=\color{Maroon}, % 字符串：栗色
+  directivestyle=\color{Brown}, % 预处理器指令：棕色
+  identifierstyle=\color{Black}, % 标识符：黑色
+  numberstyle=\tiny\color{Gray}, % 数字：灰色小字
+  columns=flexible,
+  numbers=left, % 显示行号在左边
+  numbersep=1.5em, % 设置行号的具体位置
+  numberstyle=\footnotesize\color{Gray}, % 行号样式
+  frame=single, % 边框
+  framesep=1em, % 设置代码与边框的距离
+  rulecolor=\color{lightgray}, % 边框颜色
+  backgroundcolor=\color{Gray!5}, % 背景色：淡灰色
+  tabsize=4, % Tab键宽度
+  showstringspaces=false % 不显示字符串中的空格标记
+}
+
+\linespread{1}
+
+\begin{document}
+
+{
+  \centering
+  \fontsize{20pt}{24pt}\selectfont 温州理工学院
+
+  \fontsize{15pt}{30pt}\selectfont \underline{嵌入式开发综合实践}实验报告
+
+  \begin{table}[H]
+    \centering
+    \fontsize{12pt}{14pt}\selectfont
+    \begin{tabular}{|c|c|c|c|c|c|}
+      \hline
+      \textbf{实验名称:} & \multicolumn{5}{c|}{\textbf{嵌入式开发综合实践设计说明书}} \\
+      \hline
+      \textbf{班~~级:} & \textbf{23计科三班} & \textbf{姓~~名:} & \textbf{程奕扬} & \textbf{学~~号:} & \textbf{23219111301} \\
+      \hline
+      \textbf{实验地点:} & \textbf{实3-1-205} & \textbf{日~~期:} & \multicolumn{3}{c|}{\textbf{2025年6月10日星期二}} \\
+      \hline
+    \end{tabular}
+  \end{table}
+}
+
+\raggedright
+
+\input{../sections/1-2.restatement.tex}
+
+\input{../sections/3.design.tex}
+
+\input{../sections/4.program.tex}
+
+\input{../sections/5.debugging.tex}
+
+\input{../sections/6.summary.tex}
+
+\input{../sections/7.references.tex}
+
+\end{document}

@@ -1,0 +1,333 @@
+\section{方案论证与设计}
+
+\subsection{需求分析与论证}
+
+\subsubsection{项目背景与目标}
+
+\qquad 随着物联网技术的发展和人们对智能化生活需求的不断提升，传统的风扇控制方式已无法满足现代用户对舒适度和节能的双重要求。本项目旨在设计并实现一款基于STM32F4xx微控制器的智能风扇控制系统，通过集成多种传感器和智能控制算法，实现风扇的自动化和智能化管理。
+
+\subsubsection{功能需求分析}
+
+\textbf{1. 核心控制功能需求}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{温度自适应控制}：系统需能够根据环境温度自动调节风扇转速，实现智能化温控
+    \vspace{-6pt}
+  \item \textbf{多档位风速控制}：支持0-3档风速调节，对应PWM占空比为0\%、33\%、66\%、100\%
+    \vspace{-6pt}
+  \item \textbf{双模式运行}：支持自动模式和手动模式切换，满足不同使用场景需求
+\end{itemize}
+
+\textbf{2. 人机交互功能需求}
+
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{LCD显示界面}：实时显示温湿度、风扇转速、工作模式等关键信息
+    \vspace{-6pt}
+  \item \textbf{按键操控功能}：提供K1-K4四个按键，分别实现档位调节、模式切换、系统开关等功能
+    \vspace{-6pt}
+  \item \textbf{状态指示功能}：通过RGB LED和蜂鸣器提供直观的状态反馈
+\end{itemize}
+
+\textbf{3. 智能感知功能需求}
+
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{环境监测}：集成HTU21D传感器，实现温湿度的精确测量
+    \vspace{-6pt}
+  \item \textbf{通信接口}：支持UART串口通信，可接收外部控制指令
+\end{itemize}
+
+\subsection{方案设计}
+
+\subsubsection{硬件方案}
+
+\qquad 本智能风扇控制系统采用模块化硬件设计，以STM32F4xx系列微控制器为核心，集成多种传感器和执行器件，构建完整的智能控制平台。
+
+\textbf{1. 核心控制模块}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{主控芯片}：STM32F4xx系列微控制器，工作频率168MHz
+    \vspace{-6pt}
+  \item \textbf{系统时钟}：采用外部晶振，提供稳定的系统时钟源
+    \vspace{-6pt}
+  \item \textbf{电源管理}：DC 12V外部电源供电，内部稳压电路提供3.3V工作电压
+\end{itemize}
+
+\textbf{2. 传感器模块}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{温湿度传感器}：HTU21D数字传感器，I2C通信接口
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 温度测量范围：-40°C至+125°C，精度±0.3°C
+        \vspace{-3pt}
+      \item 湿度测量范围：0-100\%RH，精度±2\%RH
+    \end{itemize}
+    \vspace{-6pt}
+\end{itemize}
+
+\textbf{3. 人机交互模块}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{LCD显示屏}：320×240像素彩色LCD显示器
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 实时显示温湿度、风扇转速、工作模式
+        \vspace{-3pt}
+      \item 支持中文字符显示，具备文字居中对齐功能
+    \end{itemize}
+    \vspace{-6pt}
+  \item \textbf{按键输入}：4个独立按键，支持中断触发
+    \begin{itemize}
+        \vspace{-3pt}
+      \item K1：手动模式下风扇档位增加
+        \vspace{-3pt}
+      \item K2：手动模式下风扇档位减少
+        \vspace{-3pt}
+      \item K3：自动/手动模式切换
+        \vspace{-3pt}
+      \item K4：系统电源开关
+    \end{itemize}
+    \vspace{-6pt}
+  \item \textbf{状态指示}：RGB LED灯和蜂鸣器
+    \begin{itemize}
+        \vspace{-3pt}
+      \item RGB LED：不同颜色指示风扇运行状态
+        \vspace{-3pt}
+      \item 蜂鸣器：按键确认和高温警报提示
+    \end{itemize}
+\end{itemize}
+
+\textbf{4. 执行器模块}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{风扇控制}：PWM调速控制，支持0-100\%无级调速
+    \begin{itemize}
+        \vspace{-3pt}
+      \item PWM频率：50kHz，确保静音运行
+        \vspace{-3pt}
+      \item 档位设置：0档(0\%)、1档(33\%)、2档(66\%)、3档(100\%)
+    \end{itemize}
+    \vspace{-6pt}
+  \item \textbf{指示灯控制}：D1/D2 LED指示当前工作模式
+\end{itemize}
+
+\textbf{5. 通信接口模块}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{UART串口}：波特率115200bps，支持远程控制命令
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 接收命令："Auto"切换自动模式，"Manual"切换手动模式
+        \vspace{-3pt}
+      \item 发送状态：定时输出系统状态和传感器数据
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{软件方案}
+
+\qquad 软件系统采用模块化设计思想，基于前后台程序架构，结合中断服务程序实现实时响应。系统软件分为初始化模块、控制逻辑模块、通信模块和显示模块等。
+
+\textbf{1. 系统架构设计}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{主程序架构}：采用无限循环的前台程序结构
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 主循环周期：1ms，确保系统实时响应
+        \vspace{-3pt}
+      \item 任务调度：基于时间片轮询的任务调度机制
+    \end{itemize}
+    \vspace{-6pt}
+  \item \textbf{中断处理}：按键中断优先级最高，确保用户操作及时响应
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 按键防抖：50ms软件防抖处理
+        \vspace{-3pt}
+      \item 中断标志：通过全局变量进行中断事件传递
+    \end{itemize}
+\end{itemize}
+
+\textbf{2. 状态机设计}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{系统状态}：系统开/关两种基本状态
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 开机状态：正常执行所有功能模块
+        \vspace{-3pt}
+      \item 关机状态：停止风扇运行，保持状态监测
+    \end{itemize}
+    \vspace{-6pt}
+  \item \textbf{工作模式}：自动模式和手动模式
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 自动模式：根据温度阈值自动调节风扇档位
+        \vspace{-3pt}
+      \item 手动模式：用户通过按键手动设置风扇档位
+    \end{itemize}
+    \vspace{-6pt}
+\end{itemize}
+
+\textbf{3. 控制算法}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{温度控制算法}：基于温度阈值的分档控制
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 高温区(≥30°C)：3档风速，蜂鸣器报警
+        \vspace{-3pt}
+      \item 中温区(25-29°C)：2档风速
+        \vspace{-3pt}
+      \item 低温区(20-24°C)：1档风速
+        \vspace{-3pt}
+      \item 舒适区(<20°C)：关闭风扇
+    \end{itemize}
+    \vspace{-6pt}
+
+\end{itemize}
+
+\textbf{4. 数据处理}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{传感器数据采集}：HTU21D传感器I2C通信
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 采样频率：根据需要实时读取
+        \vspace{-3pt}
+      \item 数据格式：浮点数格式存储温湿度值
+    \end{itemize}
+    \vspace{-6pt}
+  \item \textbf{显示数据处理}：LCD显示的字符串格式化
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 文字居中算法：自动计算中英文混合字符串的居中位置
+        \vspace{-3pt}
+      \item 数据格式化：温度显示2位小数，湿度显示1位小数
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{函数定义总览}
+
+\qquad 系统软件共定义了多个功能函数，按照模块进行分类管理，实现代码的模块化和可维护性。
+
+\textbf{1. 系统初始化函数}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \texttt{delay\_init(168)}：延时系统初始化，设置系统时钟
+    \vspace{-6pt}
+  \item \texttt{key\_init()}：按键GPIO初始化
+    \vspace{-6pt}
+  \item \texttt{key\_interrupt\_init()}：按键中断初始化配置
+    \vspace{-6pt}
+  \item \texttt{lcd\_init(FAN1)}：LCD显示器初始化
+    \vspace{-6pt}
+  \item \texttt{infrared\_init()}：红外传感器初始化
+    \vspace{-6pt}
+  \item \texttt{rgb\_init()}：RGB LED初始化
+    \vspace{-6pt}
+  \item \texttt{buzzer\_init()}：蜂鸣器初始化
+    \vspace{-6pt}
+  \item \texttt{led\_init()}：指示LED初始化
+    \vspace{-6pt}
+  \item \texttt{usart\_init(115200)}：串口通信初始化
+    \vspace{-6pt}
+  \item \texttt{htu21d\_init()}：温湿度传感器初始化
+    \vspace{-6pt}
+  \item \texttt{fan\_pwm\_init(50000-1, 336-1)}：风扇PWM初始化
+\end{itemize}
+
+\textbf{2. 传感器数据采集函数}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \texttt{float htu21d\_t()}：读取温度传感器数据，返回摄氏度值
+    \vspace{-6pt}
+  \item \texttt{float htu21d\_h()}：读取湿度传感器数据，返回百分比值
+\end{itemize}
+
+\textbf{3. 显示控制函数}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \texttt{int get\_centered\_x(const char *text)}：计算文字居中显示的X坐标
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 功能：智能识别中英文字符，自动计算居中位置
+        \vspace{-3pt}
+      \item 算法：中文字符16像素宽，英文字符8像素宽
+    \end{itemize}
+    \vspace{-6pt}
+  \item \texttt{void update\_display(float temp, float humi)}：更新LCD显示内容
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 显示内容：风扇转速、工作模式、温湿度数据
+        \vspace{-3pt}
+      \item 系统状态：区分开机/关机状态的不同显示内容
+    \end{itemize}
+\end{itemize}
+
+\textbf{4. 通信处理函数}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \texttt{void check\_uart\_command()}：检查并处理串口接收命令
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 支持命令："Auto"切换自动模式，"Manual"切换手动模式
+        \vspace{-3pt}
+      \item 响应机制：命令执行后发送确认信息并更新显示
+    \end{itemize}
+    \vspace{-6pt}
+  \item \texttt{void send\_system\_status(float temp, float humi)}：发送系统状态信息
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 状态内容：风扇状态、工作模式、转速、温湿度
+        \vspace{-3pt}
+      \item 发送周期：每3ms发送一次状态更新
+    \end{itemize}
+    \vspace{-6pt}
+  \item \texttt{clean\_usart()}：清空串口接收缓冲区
+\end{itemize}
+
+\textbf{5. 控制逻辑函数}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \texttt{void auto\_control(float temp, float humi)}：自动模式控制逻辑
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 温度判断：根据预设阈值自动调节风扇档位
+        \vspace{-3pt}
+      \item 状态指示：控制RGB LED和蜂鸣器状态
+        \vspace{-3pt}
+      \item 安全保护：高温时蜂鸣器报警(最多3次)
+    \end{itemize}
+    \vspace{-6pt}
+  \item \texttt{fan\_pwm\_control(fan\_pwm[count])}：风扇PWM控制输出
+    \vspace{-6pt}
+  \item \texttt{rgb\_ctrl()}：RGB指示灯控制
+    \vspace{-6pt}
+  \item \texttt{led\_control()}：模式指示LED控制
+    \vspace{-6pt}
+  \item \texttt{buzzer\_tweet()}：蜂鸣器控制
+\end{itemize}
+
+\textbf{6. 辅助工具函数}
+\begin{itemize}
+    \vspace{-6pt}
+  \item \texttt{void delay\_count(uint32\_t times)}：自定义计数延时函数
+    \begin{itemize}
+        \vspace{-3pt}
+      \item 用途：按键防抖延时，精确时间控制
+        \vspace{-3pt}
+      \item 实现：基于循环计数的软件延时
+    \end{itemize}
+    \vspace{-6pt}
+  \item \texttt{delay\_ms()}：毫秒级延时函数
+    \vspace{-6pt}
+  \item \texttt{sprintf()}：字符串格式化函数
+    \vspace{-6pt}
+  \item \texttt{printf()}：串口输出函数
+    \vspace{-6pt}
+  \item \texttt{strncmp()}：字符串比较函数
+\end{itemize}
+
+\qquad 整个软件系统通过合理的函数模块划分，实现了硬件抽象、逻辑控制和人机交互的有效分离，提高了代码的可读性、可维护性和可扩展性。各模块之间通过标准接口进行数据交换，确保系统的稳定性和可靠性。

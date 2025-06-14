@@ -1,0 +1,92 @@
+\subsection{性能分析}
+
+\qquad 智能风扇控制系统的性能分析从系统瓶颈、资源利用率等多个维度进行评估，为后续优化提供数据支撑。
+
+\subsubsection{性能瓶颈分析}
+
+\textbf{主要性能瓶颈点：}
+
+\textbf{1. 主循环频率过高}
+\begin{lstlisting}
+while(1) {
+    // 主循环执行频率约1000Hz (1ms一次)
+    delay_ms(1);
+}
+\end{lstlisting}
+
+\qquad \textbf{问题分析：}1ms的主循环对MCU资源消耗较大，CPU占用率偏高。\textbf{优化建议：}调整为5-10ms，减少CPU占用率。
+
+\textbf{2. LCD更新频率过高}
+\begin{lstlisting}
+if (no_motion_timer % 100 == 0) {
+    update_display(current_temp, current_humi);  // 每100ms更新一次
+}
+\end{lstlisting}
+
+\qquad \textbf{问题分析：}LCD更新是耗时操作，每100ms更新过于频繁。\textbf{优化建议：}改为500ms-1s更新一次。
+
+\textbf{3. 温湿度传感器读取频率高}
+\begin{lstlisting}
+// 系统关闭时仍在读取
+send_system_status(htu21d_t(), htu21d_h());  // 每3ms执行一次
+\end{lstlisting}
+
+\qquad \textbf{问题分析：}I2C通信耗时，频繁读取影响响应速度。\textbf{优化建议：}缓存数据，降低读取频率。
+
+\textbf{4. 字符串处理开销}
+\begin{lstlisting}
+int get_centered_x(const char *text) {
+    // 每次LCD显示都要计算，包含循环遍历
+    for (int i = 0; i < text_len; i++) { ... }
+}
+\end{lstlisting}
+
+\qquad \textbf{问题分析：}每次显示都重新计算居中位置。\textbf{优化建议：}预计算常用字符串的居中位置。
+
+\subsubsection{性能评估结果}
+
+\begin{table}[H]
+  \centering
+  \caption{系统性能评估对比表}
+  \label{tab:performance_evaluation}
+  \begin{tabular}{|c|c|c|c|}
+    \hline
+    \textbf{性能指标} & \textbf{当前状态} & \textbf{优化目标} & \textbf{改进方案} \\
+    \hline
+    主循环频率 & 1000Hz & 100Hz & 调整延时为10ms \\
+    \hline
+    LCD更新频率 & 10Hz & 2Hz & 500ms更新一次 \\
+    \hline
+    按键响应时间 & 50ms & 10ms & 减少防抖延时 \\
+    \hline
+    温度读取频率 & 333Hz & 10Hz & 缓存传感器数据 \\
+    \hline
+    内存使用率 & 中等 & 低 & 优化字符串处理 \\
+    \hline
+    CPU占用率 & 高 & 中 & 降低循环频率 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\textbf{优点：}功能完整、逻辑清晰、模块化程度高
+
+\textbf{改进点：}降低循环频率、优化I/O操作频率、减少字符串处理开销
+
+\subsubsection{系统架构性能分析}
+
+\textbf{核心模块组成及性能特征：}
+
+\begin{itemize}
+    \vspace{-6pt}
+  \item \textbf{系统初始化模块} - 一次性执行，性能影响小
+    \vspace{-6pt}
+  \item \textbf{按键控制模块} - 中断驱动，响应速度快
+    \vspace{-6pt}
+  \item \textbf{温湿度监测模块} - I2C通信，存在性能瓶颈
+    \vspace{-6pt}
+  \item \textbf{风扇控制模块} - PWM硬件输出，性能优秀
+    \vspace{-6pt}
+  \item \textbf{LCD显示模块} - 刷新频繁，需要优化
+    \vspace{-6pt}
+  \item \textbf{UART通信模块} - 串口硬件支持，性能良好
+\end{itemize}
